@@ -25,6 +25,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const keysRef = useRef<{ [key: string]: boolean }>({});
   const mouseRef = useRef({ x: 0, y: 0, isLocked: false });
   const velocityRef = useRef({ x: 0, y: 0, z: 0 });
+  const [showClickToStart, setShowClickToStart] = useState(true);
   const [isJumping, setIsJumping] = useState(false);
 
   useEffect(() => {
@@ -328,6 +329,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     const handleClick = () => {
       if (renderer.domElement.requestPointerLock) {
         renderer.domElement.requestPointerLock();
+        setShowClickToStart(false);
       }
     };
 
@@ -338,6 +340,24 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     // Input handling
     const handleKeyDown = (event: KeyboardEvent) => {
       keysRef.current[event.key.toLowerCase()] = true;
+      
+      // Interaction key
+      if (event.key.toLowerCase() === 'e') {
+        event.preventDefault();
+        // Check for nearby treasure
+        const currentPos = playerMeshRef.current?.position;
+        if (currentPos) {
+          treasureBoxes.forEach(box => {
+            const distance = Math.sqrt(
+              Math.pow(currentPos.x - box.x, 2) + Math.pow(currentPos.z - box.y, 2)
+            );
+            if (distance < 8 && box.isUnlocked && !box.isCompleted) {
+              onTreasureBoxInteract(box.id);
+            }
+          });
+        }
+      }
+      
       if (event.key.toLowerCase() === ' ') {
         event.preventDefault();
         if (!isJumping) {
@@ -426,16 +446,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         // Update game state if position changed
         if (newX !== currentPos.x || newZ !== currentPos.z) {
           onPlayerMove(newX, newZ);
-
-          // Check treasure box interactions
-          treasureBoxes.forEach(box => {
-            const distance = Math.sqrt(
-              Math.pow(newX - box.x, 2) + Math.pow(newZ - box.y, 2)
-            );
-            if (distance < 5 && box.isUnlocked && !box.isCompleted) {
-              onTreasureBoxInteract(box.id);
-            }
-          });
         }
       }
 
@@ -482,12 +492,15 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   return (
     <div ref={mountRef} className="w-full h-full cursor-none">
       {/* Click to start instruction */}
-      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">
-        <div className="bg-black bg-opacity-50 text-white px-6 py-3 rounded-lg text-center">
-          <p className="text-lg font-semibold">Click to start exploring!</p>
-          <p className="text-sm mt-1">Use WASD to move, mouse to look around, SPACE to jump</p>
+      {showClickToStart && (
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none">
+          <div className="bg-black bg-opacity-70 text-white px-8 py-4 rounded-xl text-center animate-pulse">
+            <p className="text-xl font-semibold mb-2">🖱️ Click to Lock Mouse Cursor</p>
+            <p className="text-sm">Then use WASD to move, mouse to look around, SPACE to jump</p>
+            <p className="text-xs mt-2 text-gray-300">Press E near treasure boxes to interact</p>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

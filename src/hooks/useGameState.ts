@@ -2,6 +2,8 @@ import { useState, useCallback, useEffect } from 'react';
 import { GameState, Player, TreasureBox, Question } from '../types/game';
 import { getRandomQuestions } from '../data/questions';
 
+type GamePhase = 'start' | 'loading' | 'playing' | 'completed';
+
 const INITIAL_PLAYER: Player = {
   x: 0,
   y: 0,
@@ -46,6 +48,9 @@ const createTreasureBoxes = (questions: Question[]): TreasureBox[] => {
 };
 
 export const useGameState = () => {
+  const [gamePhase, setGamePhase] = useState<GamePhase>('start');
+  const [nearbyTreasure, setNearbyTreasure] = useState<TreasureBox | null>(null);
+  
   const [gameState, setGameState] = useState<GameState>(() => {
     const questions = getRandomQuestions(8); // More questions for extended gameplay
     const treasureBoxes = createTreasureBoxes(questions);
@@ -61,8 +66,19 @@ export const useGameState = () => {
     };
   });
 
+  const startGame = useCallback(() => {
+    setGamePhase('loading');
+    
+    // Simulate loading time
+    setTimeout(() => {
+      setGamePhase('playing');
+    }, 3000);
+  }, []);
+
   // Save game state to localStorage
   useEffect(() => {
+    if (gamePhase !== 'playing') return;
+    
     const saveData = {
       player: gameState.player,
       completedBoxes: gameState.treasureBoxes.filter(box => box.isCompleted).map(box => box.id),
@@ -73,6 +89,8 @@ export const useGameState = () => {
 
   // Load game state from localStorage
   useEffect(() => {
+    if (gamePhase !== 'playing') return;
+    
     const savedData = localStorage.getItem('treasureHuntSave');
     if (savedData) {
       try {
@@ -90,9 +108,17 @@ export const useGameState = () => {
         console.error('Failed to load saved game:', error);
       }
     }
-  }, []);
+  }, [gamePhase]);
 
   const movePlayer = useCallback((x: number, y: number) => {
+    // Check for nearby treasures
+    const nearTreasure = gameState.treasureBoxes.find(box => {
+      const distance = Math.sqrt(Math.pow(x - box.x, 2) + Math.pow(y - box.y, 2));
+      return distance < 8 && box.isUnlocked && !box.isCompleted;
+    });
+    
+    setNearbyTreasure(nearTreasure || null);
+    
     setGameState(prev => ({
       ...prev,
       player: {
@@ -101,7 +127,7 @@ export const useGameState = () => {
         y
       }
     }));
-  }, []);
+  }, [gameState.treasureBoxes]);
 
   const interactWithTreasureBox = useCallback((boxId: string) => {
     const box = gameState.treasureBoxes.find(b => b.id === boxId);
@@ -180,6 +206,12 @@ export const useGameState = () => {
     }));
   }, []);
 
+  const interactWithNearbyTreasure = useCallback(() => {
+    if (nearbyTreasure) {
+      interactWithTreasureBox(nearbyTreasure.id);
+    }
+  }, [nearbyTreasure, interactWithTreasureBox]);
+
   const resetGame = useCallback(() => {
     const questions = getRandomQuestions(8);
     const treasureBoxes = createTreasureBoxes(questions);
@@ -195,13 +227,29 @@ export const useGameState = () => {
     });
     
     localStorage.removeItem('treasureHuntSave');
+    setGamePhase('start');
+    setNearbyTreasure(null);
   }, []);
+
+  // Check if game is completed
+  useEffect(() => {
+    if (gamePhase === 'playing') {
+      const completedCount = gameState.treasureBoxes.filter(box => box.isCompleted).length;
+      if (completedCount === gameState.treasureBoxes.length && completedCount > 0) {
+        setGamePhase('completed');
+      }
+    }
+  }, [gameState.treasureBoxes, gamePhase]);
 
   return {
     gameState,
+    gamePhase,
+    nearbyTreasure,
     actions: {
+      startGame,
       movePlayer,
       interactWithTreasureBox,
+      interactWithNearbyTreasure,
       answerQuestion,
       closeQuestionModal,
       toggleHints,
